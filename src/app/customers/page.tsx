@@ -12,8 +12,8 @@ export default function CustomersPage() {
         <div className="max-w-[1400px] mx-auto">
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-bold glass-text">
-              <span className="tech-gradient">Customer Management</span>
+            <h1 className="text-3xl font-bold text-white">
+              Customer Management
             </h1>
             <button className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
               <FaPlus className="text-sm" />
