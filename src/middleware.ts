@@ -3,27 +3,43 @@ import type { NextRequest } from 'next/server';
 import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
-// Create a new ratelimiter that allows 10 requests per 10 seconds
-const ratelimit = new Ratelimit({
-  redis: Redis.fromEnv(),
-  limiter: Ratelimit.slidingWindow(10, '10 s'),
-  analytics: true,
-});
+// Initialize ratelimiter only if environment variables are set
+const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    })
+  : null;
+
+const ratelimit = redis
+  ? new Ratelimit({
+      redis: redis,
+      limiter: Ratelimit.slidingWindow(10, '10 s'),
+      analytics: true,
+    })
+  : null;
 
 export async function middleware(request: NextRequest) {
-  // Rate limiting by IP
-  const ip = request.ip ?? '127.0.0.1';
-  const { success, pending, limit, reset, remaining } = await ratelimit.limit(
-    `ratelimit_${ip}`
-  );
+  // Only apply rate limiting if configured
+  if (ratelimit) {
+    try {
+      const ip = request.ip ?? '127.0.0.1';
+      const { success, pending, limit, reset, remaining } = await ratelimit.limit(
+        `ratelimit_${ip}`
+      );
 
-  if (!success) {
-    return new NextResponse('Too Many Requests', {
-      status: 429,
-      headers: {
-        'Retry-After': reset.toString(),
-      },
-    });
+      if (!success) {
+        return new NextResponse('Too Many Requests', {
+          status: 429,
+          headers: {
+            'Retry-After': reset.toString(),
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Rate limiting error:', error);
+      // Continue without rate limiting if there's an error
+    }
   }
 
   // Get the response
