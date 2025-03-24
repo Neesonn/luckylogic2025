@@ -4,14 +4,18 @@
 
 :root {
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
+  --background-start-rgb: 10, 12, 16;
+  --background-end-rgb: 16, 20, 28;
+  --card-bg: rgba(24, 27, 33, 0.7);
+  --accent-green: #22c55e;
+  --card-border: rgba(255, 255, 255, 0.1);
+  --card-shadow: rgba(0, 0, 0, 0.25);
 }
 
 body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(
-    to bottom,
+    135deg,
     rgb(var(--background-start-rgb)),
     rgb(var(--background-end-rgb))
   );
@@ -22,21 +26,85 @@ body {
 }
 
 .glass-container {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--card-bg);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--card-border);
   border-radius: 1rem;
   padding: 2rem;
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  box-shadow: 0 8px 32px 0 var(--card-shadow);
+  transition: all 0.3s ease;
+}
+
+.glass-container:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px 0 var(--card-shadow);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.stat-card {
+  background: var(--card-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--card-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .glass-text {
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
 }
 
 .tech-gradient {
-  background: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.icon-container {
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 50%;
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 1rem;
+}
+
+.nav-icon {
+  color: var(--accent-green);
+  transition: all 0.3s ease;
+}
+
+.nav-icon:hover {
+  color: #16a34a;
+}
+
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--accent-green);
+  margin: 0.5rem 0;
+}
+
+.stat-label {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.logout-button {
+  color: #ef4444;
+  transition: all 0.3s ease;
+}
+
+.logout-button:hover {
+  color: #dc2626;
 } 
