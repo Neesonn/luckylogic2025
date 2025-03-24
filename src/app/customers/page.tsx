@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { FaSearch, FaPlus, FaFilter } from 'react-icons/fa';
 import Sidebar from '@/components/Sidebar';
 import { supabase } from '@/lib/supabaseClient';
+import { AddCustomerForm } from '@/components/AddCustomerForm';
 
 type Customer = {
   id: string;
@@ -23,25 +24,26 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  const fetchCustomers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCustomers(data as Customer[]);
+    } catch (err) {
+      console.error('Error fetching customers:', err);
+      setError('Failed to load customers. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchCustomers = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('customers')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setCustomers(data as Customer[]);
-      } catch (err) {
-        console.error('Error fetching customers:', err);
-        setError('Failed to load customers. Please try again later.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCustomers();
   }, []);
 
@@ -56,7 +58,10 @@ export default function CustomersPage() {
             <h1 className="text-3xl font-bold text-white">
               Customer Management
             </h1>
-            <button className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
+            <button 
+              onClick={() => setShowAddForm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+            >
               <FaPlus className="text-sm" />
               Add Customer
             </button>
@@ -158,6 +163,17 @@ export default function CustomersPage() {
           </div>
         </div>
       </main>
+
+      {/* Add Customer Modal */}
+      {showAddForm && (
+        <AddCustomerForm
+          onSuccess={() => {
+            setShowAddForm(false);
+            fetchCustomers();
+          }}
+          onClose={() => setShowAddForm(false)}
+        />
+      )}
     </div>
   );
 } 
