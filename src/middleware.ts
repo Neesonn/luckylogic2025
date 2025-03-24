@@ -1,45 +1,37 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { Redis } from '@upstash/redis';
+import Redis from 'ioredis';
 import { Ratelimit } from '@upstash/ratelimit';
 
-// Initialize ratelimiter only if environment variables are set
-const redis = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-  ? new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    })
-  : null;
+// Initialize Redis client with the provided URL
+const redis = new Redis("rediss://default:AZ7vAAIjcDEyZGQzNTM4YWEyYmQ0MmRhYWZiM2VlZjc0NmYyZThkNHAxMA@deciding-camel-40687.upstash.io:6379");
 
-const ratelimit = redis
-  ? new Ratelimit({
-      redis: redis,
-      limiter: Ratelimit.slidingWindow(10, '10 s'),
-      analytics: true,
-    })
-  : null;
+// Create rate limiter instance
+const ratelimit = new Ratelimit({
+  redis: redis as any, // Type assertion needed as Upstash expects their own Redis client
+  limiter: Ratelimit.slidingWindow(10, '10 s'),
+  analytics: true,
+});
 
 export async function middleware(request: NextRequest) {
-  // Only apply rate limiting if configured
-  if (ratelimit) {
-    try {
-      const ip = request.ip ?? '127.0.0.1';
-      const { success, pending, limit, reset, remaining } = await ratelimit.limit(
-        `ratelimit_${ip}`
-      );
+  // Apply rate limiting
+  try {
+    const ip = request.ip ?? '127.0.0.1';
+    const { success, pending, limit, reset, remaining } = await ratelimit.limit(
+      `ratelimit_${ip}`
+    );
 
-      if (!success) {
-        return new NextResponse('Too Many Requests', {
-          status: 429,
-          headers: {
-            'Retry-After': reset.toString(),
-          },
-        });
-      }
-    } catch (error) {
-      console.error('Rate limiting error:', error);
-      // Continue without rate limiting if there's an error
+    if (!success) {
+      return new NextResponse('Too Many Requests', {
+        status: 429,
+        headers: {
+          'Retry-After': reset.toString(),
+        },
+      });
     }
+  } catch (error) {
+    console.error('Rate limiting error:', error);
+    // Continue without rate limiting if there's an error
   }
 
   // Get the response
