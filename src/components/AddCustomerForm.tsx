@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { FaTimes } from 'react-icons/fa';
+import { faker } from '@faker-js/faker/locale/en_AU'; // Using Australian locale
 
 interface AddCustomerFormProps {
   onSuccess: () => void;
@@ -33,6 +34,25 @@ export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
       ...prev,
       [name]: type === 'checkbox' ? checked : value,
     }));
+  };
+
+  const generateDummyData = () => {
+    // Australian states
+    const states = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
+    
+    setFormData({
+      first_name: faker.person.firstName(),
+      last_name: faker.person.lastName(),
+      phone_number: `04${faker.string.numeric(8)}`.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3'),
+      email_address: faker.internet.email().toLowerCase(),
+      address_line_1: faker.location.streetAddress(),
+      address_line_2: Math.random() > 0.5 ? `Unit ${faker.number.int({ min: 1, max: 999 })}` : '',
+      suburb: faker.location.city(),
+      postcode: faker.location.zipCode('####'), // Australian format
+      state: states[Math.floor(Math.random() * states.length)],
+      country: 'Australia',
+      active_status: Math.random() > 0.2, // 80% chance of being active
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -206,21 +226,31 @@ export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
               </div>
             )}
 
-            <div className="mt-6 flex justify-end gap-3">
+            <div className="mt-6 flex items-center justify-between">
               <button
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                onClick={generateDummyData}
+                className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
               >
-                Cancel
+                Generate Dummy Data
               </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
-              >
-                {loading ? 'Adding...' : 'Add Customer'}
-              </button>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50"
+                >
+                  {loading ? 'Adding...' : 'Add Customer'}
+                </button>
+              </div>
             </div>
           </form>
         </div>
