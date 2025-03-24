@@ -16,7 +16,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen p-8">
       {/* Navigation Bar */}
       <nav className="flex justify-between items-center mb-12">
-        <Link href="/admin" className="nav-icon text-2xl">
+        <Link href="/admin-dashboard" className="nav-icon text-2xl">
           <FaHome />
         </Link>
         <h1 className="text-4xl font-bold text-center">Admin Dashboard</h1>
@@ -28,7 +28,7 @@ export default function AdminDashboard() {
       {/* Main Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
         {/* Customer Accounts Card */}
-        <Link href="/admin/customers" className="glass-container text-center">
+        <Link href="/admin-dashboard/customers" className="glass-container text-center">
           <div className="icon-container mx-auto">
             <FaUsers className="text-xl" />
           </div>
@@ -37,7 +37,7 @@ export default function AdminDashboard() {
         </Link>
 
         {/* Jobs Card */}
-        <Link href="/admin/jobs" className="glass-container text-center">
+        <Link href="/admin-dashboard/jobs" className="glass-container text-center">
           <div className="icon-container mx-auto">
             <FaBriefcase className="text-xl" />
           </div>
@@ -46,7 +46,7 @@ export default function AdminDashboard() {
         </Link>
 
         {/* Leads Card */}
-        <Link href="/admin/leads" className="glass-container text-center">
+        <Link href="/admin-dashboard/leads" className="glass-container text-center">
           <div className="icon-container mx-auto">
             <FaPhoneAlt className="text-xl" />
           </div>
