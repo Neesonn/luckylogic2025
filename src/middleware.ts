@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import Redis from 'ioredis';
+import { Redis } from '@upstash/redis';
 import { Ratelimit } from '@upstash/ratelimit';
 
-// Initialize Redis client with the provided URL
-const redis = new Redis("rediss://default:AZ7vAAIjcDEyZGQzNTM4YWEyYmQ0MmRhYWZiM2VlZjc0NmYyZThkNHAxMA@deciding-camel-40687.upstash.io:6379");
+if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+  throw new Error('Missing required environment variables for Upstash Redis');
+}
+
+// Initialize Redis client with Upstash REST client
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN,
+});
 
 // Create rate limiter instance
 const ratelimit = new Ratelimit({
-  redis: redis as any, // Type assertion needed as Upstash expects their own Redis client
+  redis: redis,
   limiter: Ratelimit.slidingWindow(10, '10 s'),
   analytics: true,
 });
@@ -17,9 +24,13 @@ export async function middleware(request: NextRequest) {
   // Apply rate limiting
   try {
     const ip = request.ip ?? '127.0.0.1';
+    console.log('Rate limiting request from IP:', ip);
+    
     const { success, pending, limit, reset, remaining } = await ratelimit.limit(
       `ratelimit_${ip}`
     );
+
+    console.log('Rate limit response:', { success, limit, remaining });
 
     if (!success) {
       return new NextResponse('Too Many Requests', {
