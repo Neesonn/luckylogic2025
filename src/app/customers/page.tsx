@@ -1,9 +1,50 @@
 'use client';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { FaSearch, FaPlus, FaFilter } from 'react-icons/fa';
 import Sidebar from '@/components/Sidebar';
+import { supabase } from '@/lib/supabaseClient';
+
+type Customer = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone_number?: string;
+  email_address: string;
+  address_line_1: string;
+  address_line_2?: string;
+  suburb: string;
+  postcode: string;
+  state: string;
+  country: string;
+  active_status: boolean;
+};
 
 export default function CustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('customers')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setCustomers(data as Customer[]);
+      } catch (err) {
+        console.error('Error fetching customers:', err);
+        setError('Failed to load customers. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
   return (
     <div className="min-h-screen flex">
       <Sidebar />
@@ -52,26 +93,50 @@ export default function CustomersPage() {
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Email</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Suburb</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Postcode</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  <tr>
-                    <td className="px-4 py-8 text-center text-gray-400" colSpan={7}>
-                      No customers found
-                    </td>
-                  </tr>
-                  {/* Example row (commented out until data is available) */}
-                  {/*
-                  <tr className="hover:bg-white/5">
-                    <td className="py-4 px-4">ACC001</td>
-                    <td className="py-4 px-4">John</td>
-                    <td className="py-4 px-4">Doe</td>
-                    <td className="py-4 px-4">0412 345 678</td>
-                    <td className="py-4 px-4">john.doe@example.com</td>
-                    <td className="py-4 px-4">Richmond</td>
-                    <td className="py-4 px-4">3121</td>
-                  </tr>
-                  */}
+                  {loading ? (
+                    <tr>
+                      <td className="px-4 py-8 text-center text-gray-400" colSpan={8}>
+                        Loading customers...
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td className="px-4 py-8 text-center text-red-400" colSpan={8}>
+                        {error}
+                      </td>
+                    </tr>
+                  ) : customers.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-8 text-center text-gray-400" colSpan={8}>
+                        No customers found
+                      </td>
+                    </tr>
+                  ) : (
+                    customers.map((customer) => (
+                      <tr key={customer.id} className="hover:bg-white/5">
+                        <td className="py-4 px-4">{customer.id}</td>
+                        <td className="py-4 px-4">{customer.first_name}</td>
+                        <td className="py-4 px-4">{customer.last_name}</td>
+                        <td className="py-4 px-4">{customer.phone_number || 'N/A'}</td>
+                        <td className="py-4 px-4">{customer.email_address}</td>
+                        <td className="py-4 px-4">{customer.suburb}</td>
+                        <td className="py-4 px-4">{customer.postcode}</td>
+                        <td className="py-4 px-4">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            customer.active_status 
+                              ? 'bg-green-500/20 text-green-400' 
+                              : 'bg-red-500/20 text-red-400'
+                          }`}>
+                            {customer.active_status ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -79,7 +144,9 @@ export default function CustomersPage() {
 
           {/* Pagination */}
           <div className="flex justify-between items-center mt-6 text-sm text-gray-400">
-            <div>Showing 0 of 0 customers</div>
+            <div>
+              Showing {customers.length} of {customers.length} customers
+            </div>
             <div className="flex gap-2">
               <button className="px-3 py-1 bg-white/5 rounded hover:bg-white/10 transition-colors disabled:opacity-50" disabled>
                 Previous
