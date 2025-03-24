@@ -75,15 +75,16 @@ export async function middleware(request: NextRequest) {
     'camera=(), microphone=(), geolocation=(), interest-cohort=()'
   );
 
-  // Content Security Policy
+  // Content Security Policy with Google Fonts support
   headers.set(
     'Content-Security-Policy',
     `
       default-src 'self';
       script-src 'self' 'unsafe-inline' 'unsafe-eval';
-      style-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       img-src 'self' blob: data:;
-      font-src 'self';
+      font-src 'self' https://fonts.gstatic.com;
+      connect-src 'self';
       object-src 'none';
       base-uri 'self';
       form-action 'self';
