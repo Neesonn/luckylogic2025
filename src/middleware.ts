@@ -75,24 +75,5 @@ export async function middleware(request: NextRequest) {
     'camera=(), microphone=(), geolocation=(), interest-cohort=()'
   );
 
-  // Content Security Policy with Google Fonts support
-  headers.set(
-    'Content-Security-Policy',
-    `
-      default-src 'self';
-      script-src 'self' 'unsafe-inline' 'unsafe-eval';
-      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-      img-src 'self' blob: data:;
-      font-src 'self' https://fonts.gstatic.com;
-      connect-src 'self';
-      object-src 'none';
-      base-uri 'self';
-      form-action 'self';
-      frame-ancestors 'none';
-      block-all-mixed-content;
-      upgrade-insecure-requests;
-    `.replace(/\s+/g, ' ').trim()
-  );
-
   return response;
 } 

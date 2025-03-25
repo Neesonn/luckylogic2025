@@ -35,7 +35,7 @@ export default function AdminDashboard() {
                   <FaUsers className="text-xl text-green-500" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-400">Total Accounts</h3>
+                  <h3 className="text-sm font-medium text-gray-400">Total Customers</h3>
                   <p className="text-2xl font-bold text-green-500">0</p>
                 </div>
               </div>

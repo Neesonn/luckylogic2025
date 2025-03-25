@@ -40,35 +40,115 @@ export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
     // Australian states
     const states = ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'];
     
-    setFormData({
-      first_name: faker.person.firstName(),
-      last_name: faker.person.lastName(),
-      phone_number: `04${faker.string.numeric(8)}`.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3'),
-      email_address: faker.internet.email().toLowerCase(),
-      address_line_1: faker.location.streetAddress(),
-      address_line_2: Math.random() > 0.5 ? `Unit ${faker.number.int({ min: 1, max: 999 })}` : '',
-      suburb: faker.location.city(),
-      postcode: faker.location.zipCode('####'), // Australian format
-      state: states[Math.floor(Math.random() * states.length)],
-      country: 'Australia',
-      active_status: Math.random() > 0.2, // 80% chance of being active
-    });
+    // Add a small delay to prevent rate limiting
+    setTimeout(() => {
+      setFormData({
+        first_name: faker.person.firstName(),
+        last_name: faker.person.lastName(),
+        phone_number: `04${faker.string.numeric(8)}`.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3'),
+        email_address: faker.internet.email().toLowerCase(),
+        address_line_1: faker.location.streetAddress(),
+        address_line_2: Math.random() > 0.5 ? `Unit ${faker.number.int({ min: 1, max: 999 })}` : '',
+        suburb: faker.location.city(),
+        postcode: faker.location.zipCode('####'), // Australian format
+        state: states[Math.floor(Math.random() * states.length)],
+        country: 'Australia',
+        active_status: Math.random() > 0.2, // 80% chance of being active
+      });
+    }, 500); // Add a 500ms delay
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return; // Prevent multiple submissions
+    
     setLoading(true);
     setError(null);
 
-    const { error } = await supabase.from('customers').insert([formData]);
+    const submitWithRetry = async (retryCount = 0): Promise<void> => {
+      try {
+        console.log('Attempting to insert customer:', formData);
+        const { data, error } = await supabase
+          .from('customers')
+          .insert([formData])
+          .select()
+          .single(); // Only expect one row
 
-    if (error) {
-      setError(error.message);
-    } else {
-      onSuccess(); // Hide form and refresh list
+        if (error) {
+          console.error('Supabase error details:', {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint
+          });
+          
+          if (error.code === '429' && retryCount < 3) {
+            const delay = 2000 * (retryCount + 1);
+            console.log(`Rate limited. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return submitWithRetry(retryCount + 1);
+          }
+          
+          if (error.code === '23505') {
+            setError('A customer with this email already exists.');
+          } else if (error.code === '23503') {
+            setError('Invalid reference in the data.');
+          } else if (error.code === 'PGRST116') {
+            setError('You do not have permission to add customers.');
+          } else if (error.code === '429') {
+            setError('Too many requests. Please wait a moment and try again.');
+          } else {
+            setError(`Error: ${error.message}${error.hint ? ` (Hint: ${error.hint})` : ''}`);
+          }
+          return;
+        }
+
+        console.log('Customer added successfully:', data);
+        onSuccess(); // Hide form and refresh list
+      } catch (err) {
+        console.error('Network or unexpected error:', err);
+        setError('Connection failed. Please check your internet connection and try again.');
+      }
+    };
+
+    try {
+      await submitWithRetry();
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setLoading(false);
+  const generateBulkDummyCustomers = async () => {
+    setLoading(true);
+    try {
+      const dummyCustomers = Array.from({ length: 5 }).map(() => ({
+        first_name: faker.person.firstName(),
+        last_name: faker.person.lastName(),
+        phone_number: `04${faker.string.numeric(8)}`.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3'),
+        email_address: faker.internet.email().toLowerCase(),
+        address_line_1: faker.location.streetAddress(),
+        address_line_2: faker.location.secondaryAddress(),
+        suburb: faker.location.city(),
+        postcode: faker.location.zipCode('####'),
+        state: ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'][Math.floor(Math.random() * 8)],
+        country: 'Australia',
+        active_status: true,
+      }));
+
+      const { error } = await supabase.from('customers').insert(dummyCustomers);
+
+      if (error) {
+        console.error('Bulk insert error:', error);
+        setError('Failed to insert dummy customers: ' + error.message);
+      } else {
+        onSuccess(); // This will refresh the customer list
+      }
+    } catch (err) {
+      console.error('Error generating dummy customers:', err);
+      setError('Failed to generate dummy customers');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -229,10 +309,10 @@ export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
             <div className="mt-6 flex items-center justify-between">
               <button
                 type="button"
-                onClick={generateDummyData}
-                className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+                onClick={generateBulkDummyCustomers}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
               >
-                Generate Dummy Data
+                Generate 5 Dummy Customers
               </button>
 
               <div className="flex gap-3">
