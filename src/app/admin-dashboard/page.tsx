@@ -1,10 +1,37 @@
 'use client';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FaUsers, FaBriefcase, FaPhoneAlt, FaChartLine } from 'react-icons/fa';
+import { supabase } from '@/lib/supabaseClient';
 import Sidebar from '@/components/Sidebar';
 
 export default function AdminDashboard() {
+  const [totalCustomers, setTotalCustomers] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchCustomerCount() {
+      try {
+        setLoading(true);
+        const { count, error } = await supabase
+          .from('customers')
+          .select('*', { count: 'exact', head: true });
+
+        if (error) throw error;
+        
+        setTotalCustomers(count || 0);
+      } catch (err) {
+        console.error('Error fetching customer count:', err);
+        setError('Failed to load customer count');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchCustomerCount();
+  }, []);
+
   return (
     <div className="min-h-screen flex">
       <Sidebar />
@@ -36,7 +63,13 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-gray-400">Total Customers</h3>
-                  <p className="text-2xl font-bold text-green-500">0</p>
+                  {loading ? (
+                    <p className="text-2xl font-bold text-gray-500">Loading...</p>
+                  ) : error ? (
+                    <p className="text-2xl font-bold text-red-500">Error</p>
+                  ) : (
+                    <p className="text-2xl font-bold text-green-500">{totalCustomers}</p>
+                  )}
                 </div>
               </div>
             </div>
