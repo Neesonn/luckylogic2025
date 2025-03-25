@@ -2,7 +2,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FaUsers, FaBriefcase, FaPhoneAlt, FaHome, FaChartLine } from 'react-icons/fa';
+import { FaUsers, FaBriefcase, FaPhoneAlt, FaHome, FaChartLine, FaClipboardList, FaInfoCircle, FaShieldAlt } from 'react-icons/fa';
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -10,6 +10,29 @@ export default function Sidebar() {
   const isActive = (path: string) => {
     return pathname === path;
   };
+
+  const navigation = [
+    {
+      name: 'Dashboard',
+      href: '/',
+      icon: FaHome
+    },
+    {
+      name: 'Customers',
+      href: '/customers',
+      icon: FaUsers
+    },
+    {
+      name: 'Privacy Policy',
+      href: '/privacy',
+      icon: FaShieldAlt
+    },
+    {
+      name: 'Disclaimer',
+      href: '/disclaimer',
+      icon: FaInfoCircle
+    }
+  ];
 
   return (
     <nav className="w-64 bg-[rgba(24,27,33,0.95)] backdrop-blur-md border-r border-white/10 p-6 fixed h-full">
@@ -44,17 +67,6 @@ export default function Sidebar() {
         >
           <FaUsers className="text-xl" />
           <span>Customers</span>
-        </Link>
-        <Link 
-          href="/jobs" 
-          className={`flex items-center gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors ${
-            isActive('/jobs') 
-              ? 'text-green-500 bg-white/5' 
-              : 'text-gray-300 hover:text-green-500'
-          }`}
-        >
-          <FaBriefcase className="text-xl" />
-          <span>Jobs</span>
         </Link>
         <Link 
           href="/leads" 

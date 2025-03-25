@@ -16,11 +16,14 @@ export default function Home() {
       </Link>
 
       <div className="glass-container text-center">
-        <h1 className="text-6xl font-bold mb-4 glass-text">
+        <h1 className="text-6xl font-bold mb-4 text-white">
           <span className="tech-gradient">Lucky Logic</span>
         </h1>
-        <p className="text-2xl text-gray-300 glass-text">
+        <p className="text-2xl text-white mb-4">
           Coming Soon
+        </p>
+        <p className="text-gray-400">
+          Your trusted partner in customer management solutions
         </p>
         <div className="mt-8">
           <div className="w-16 h-16 mx-auto border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>

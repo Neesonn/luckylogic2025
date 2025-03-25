@@ -1,9 +1,17 @@
 'use client';
 import React, { useEffect, useState, useCallback } from 'react';
-import { FaSearch, FaPlus, FaFilter } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaFilter, FaSpinner, FaExclamationTriangle, FaEye, FaEdit, FaTrash, FaCircle } from 'react-icons/fa';
 import Sidebar from '@/components/Sidebar';
 import { supabase } from '@/lib/supabaseClient';
 import { AddCustomerForm } from '@/components/AddCustomerForm';
+import Link from 'next/link';
+import debounce from 'lodash/debounce';
+import { MagnifyingGlassIcon, UserPlusIcon } from '@heroicons/react/24/outline';
+import { useDebounce } from 'use-debounce';
+import { toast } from 'react-hot-toast';
+import { EditCustomerForm } from '@/components/EditCustomerForm';
+import { DeleteConfirmationModal } from '@/components/DeleteConfirmationModal';
+import { useRouter } from 'next/navigation';
 
 type Customer = {
   id: string;
@@ -21,75 +29,136 @@ type Customer = {
 };
 
 export default function CustomersPage() {
+  const router = useRouter();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const [customerCache, setCustomerCache] = useState<Customer[] | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch] = useDebounce(searchTerm, 400);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const pageSize = 10;
 
-  const fetchCustomers = useCallback(async () => {
-    // Return cached data if available
-    if (customerCache) {
-      setCustomers(customerCache);
-      return;
-    }
-
-    if (loading) return;
-    
+  const fetchCustomers = async () => {
     try {
       setLoading(true);
       setError(null);
+      setIsRateLimited(false);
 
-      const { data, error } = await supabase
+      // Calculate range for pagination
+      const start = (currentPage - 1) * pageSize;
+      const end = start + pageSize - 1;
+
+      // Build query
+      let query = supabase
         .from('customers')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*', { count: 'exact' });
 
-      if (error) {
-        console.error('Error fetching customers:', error);
-        if (error.code === '429' && retryCount < 3) {
-          // If rate limited, wait and retry with exponential backoff
-          setRetryCount(prev => prev + 1);
-          const delay = 2000 * (retryCount + 1);
-          console.log(`Rate limited. Retrying in ${delay}ms...`);
-          setTimeout(fetchCustomers, delay);
-          return;
-        }
-        throw error;
+      // Apply search if term exists
+      if (debouncedSearch) {
+        query = query.or(`first_name.ilike.%${debouncedSearch}%,last_name.ilike.%${debouncedSearch}%`);
       }
 
-      const customersData = data as Customer[];
-      setCustomers(customersData);
-      setCustomerCache(customersData); // Cache the results
+      // Get total count first
+      const { count, error: countError } = await query;
+
+      if (countError) {
+        if (countError.code === '429') {
+          setIsRateLimited(true);
+          throw new Error('Too many requests — please slow down.');
+        }
+        throw countError;
+      }
+
+      // Get paginated data
+      const { data, error: dataError } = await query
+        .range(start, end)
+        .order('created_at', { ascending: false });
+
+      if (dataError) {
+        if (dataError.code === '429') {
+          setIsRateLimited(true);
+          throw new Error('Too many requests — please slow down.');
+        }
+        throw dataError;
+      }
+
+      if (data) {
+        setCustomers(data);
+        setTotalPages(Math.ceil((count || 0) / pageSize));
+      }
     } catch (err) {
-      console.error('Error:', err);
-      setError('Failed to load customers. Please try again later.');
+      const message = err instanceof Error ? err.message : 'An error occurred while fetching customers';
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
-  }, [loading, retryCount, customerCache]);
+  };
 
-  // Function to force refresh data
-  const refreshCustomers = useCallback(async () => {
-    setCustomerCache(null); // Clear cache
-    await fetchCustomers();
-  }, [fetchCustomers]);
-
+  // Fetch customers when page or search term changes
   useEffect(() => {
     fetchCustomers();
-  }, [fetchCustomers]);
+  }, [currentPage, debouncedSearch]);
 
-  // Add cache invalidation when component unmounts
-  useEffect(() => {
-    return () => {
-      setCustomerCache(null);
-    };
-  }, []);
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1); // Reset to first page when searching
+  };
 
-  // Update the onSuccess handler in AddCustomerForm to refresh data
-  const handleCustomerAdded = () => {
-    refreshCustomers(); // Force refresh when new customer is added
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  const handleEdit = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setShowEditForm(true);
+  };
+
+  const handleDelete = (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!selectedCustomer) return;
+
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('customers')
+        .delete()
+        .eq('id', selectedCustomer.id);
+
+      if (error) {
+        console.error('Error deleting customer:', error);
+        let errorMessage = '';
+        if (error.code === 'PGRST116') {
+          errorMessage = 'You do not have permission to delete customers.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
+        }
+        toast.error(`❌ ${errorMessage}`);
+        return;
+      }
+
+      toast.success('✨ Customer deleted successfully!');
+      fetchCustomers();
+      router.refresh();
+    } catch (err) {
+      console.error('Network or unexpected error:', err);
+      toast.error('❌ Failed to delete customer. Please try again.');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setSelectedCustomer(null);
+    }
   };
 
   return (
@@ -107,28 +176,42 @@ export default function CustomersPage() {
               onClick={() => setShowAddForm(true)}
               className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
             >
-              <FaPlus className="text-sm" />
+              <UserPlusIcon className="h-5 w-5" />
               Add Customer
             </button>
           </div>
 
-          {/* Search and Filter Bar */}
-          <div className="glass-container mb-6">
-            <div className="flex gap-4">
-              <div className="flex-1 flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg">
-                <FaSearch className="text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search customers by name, email, phone or UCID..."
-                  className="bg-transparent w-full focus:outline-none text-white"
-                />
-              </div>
-              <button className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-                <FaFilter className="text-gray-400" />
-                <span>Filter</span>
-              </button>
+          {/* Search Bar */}
+          <div className="glass-container p-4 mb-6">
+            <div className="relative">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search customers by name..."
+                value={searchTerm}
+                onChange={handleSearch}
+                className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-white/20 text-white"
+                disabled={loading || isRateLimited}
+              />
             </div>
           </div>
+
+          {/* Rate Limit Warning */}
+          {isRateLimited && (
+            <div className="glass-container p-4 mb-6 bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center gap-3 text-red-400">
+                <FaExclamationTriangle />
+                <p>Too many requests — please slow down and try again in a moment.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded mb-4">
+              {error}
+            </div>
+          )}
 
           {/* Customers Table */}
           <div className="glass-container overflow-hidden">
@@ -136,7 +219,7 @@ export default function CustomersPage() {
               <table className="w-full min-w-[900px]">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="text-left py-3 px-4 text-gray-400 font-medium">UCID</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">UUID</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">First Name</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Last Name</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Phone</th>
@@ -144,6 +227,7 @@ export default function CustomersPage() {
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Suburb</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Postcode</th>
                     <th className="text-left py-3 px-4 text-gray-400 font-medium">Status</th>
+                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
@@ -151,12 +235,6 @@ export default function CustomersPage() {
                     <tr>
                       <td className="px-4 py-8 text-center text-gray-400" colSpan={8}>
                         Loading customers...
-                      </td>
-                    </tr>
-                  ) : error ? (
-                    <tr>
-                      <td className="px-4 py-8 text-center text-red-400" colSpan={8}>
-                        {error}
                       </td>
                     </tr>
                   ) : customers.length === 0 ? (
@@ -168,8 +246,13 @@ export default function CustomersPage() {
                   ) : (
                     customers.map((customer) => (
                       <tr key={customer.id} className="hover:bg-white/5">
-                        <td className="py-4 px-4 font-mono text-sm text-gray-300">
-                          #{customer.id.slice(0, 6).toUpperCase()}
+                        <td className="py-4 px-4 font-mono text-sm">
+                          <Link
+                            href={`/customers/${customer.id}`}
+                            className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                          >
+                            {customer.id}
+                          </Link>
                         </td>
                         <td className="py-4 px-4 text-white">{customer.first_name}</td>
                         <td className="py-4 px-4">{customer.last_name}</td>
@@ -186,6 +269,28 @@ export default function CustomersPage() {
                             {customer.active_status ? 'Active' : 'Inactive'}
                           </span>
                         </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-2">
+                            <Link
+                              href={`/customers/${customer.id}`}
+                              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                            >
+                              <FaEye className="text-gray-400" size={14} />
+                            </Link>
+                            <button
+                              onClick={() => handleEdit(customer)}
+                              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                            >
+                              <FaEdit className="text-gray-400" size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(customer)}
+                              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                            >
+                              <FaTrash className="text-gray-400" size={14} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -195,15 +300,67 @@ export default function CustomersPage() {
           </div>
 
           {/* Pagination */}
-          <div className="flex justify-between items-center mt-6 text-sm text-gray-400">
-            <div>
-              Showing {customers.length} of {customers.length} customers
+          <div className="flex justify-between items-center p-4 border-t border-white/10">
+            <div className="text-sm text-gray-400">
+              {customers.length > 0 
+                ? `Showing ${(currentPage - 1) * pageSize + 1}-${Math.min(currentPage * pageSize, (totalPages * pageSize))} of ${totalPages * pageSize} customers`
+                : 'No customers found'
+              }
             </div>
             <div className="flex gap-2">
-              <button className="px-3 py-1 bg-white/5 rounded hover:bg-white/10 transition-colors disabled:opacity-50" disabled>
+              <button 
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1 || loading}
+                className="px-3 py-1 bg-white/5 rounded hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Previous
               </button>
-              <button className="px-3 py-1 bg-white/5 rounded hover:bg-white/10 transition-colors disabled:opacity-50" disabled>
+              <div className="flex items-center gap-2">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      disabled={loading}
+                      className={`w-8 h-8 rounded ${
+                        currentPage === pageNum
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-white/5 hover:bg-white/10'
+                      } transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <>
+                    <span className="px-1">...</span>
+                    <button
+                      onClick={() => handlePageChange(totalPages)}
+                      disabled={loading}
+                      className="w-8 h-8 rounded bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {totalPages}
+                    </button>
+                  </>
+                )}
+              </div>
+              <button 
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages || loading}
+                className="px-3 py-1 bg-white/5 rounded hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 Next
               </button>
             </div>
@@ -214,10 +371,36 @@ export default function CustomersPage() {
       {/* Add Customer Modal */}
       {showAddForm && (
         <AddCustomerForm
-          onSuccess={handleCustomerAdded}
+          onSuccess={() => {
+            setShowAddForm(false);
+            setCurrentPage(1); // Reset to first page
+            fetchCustomers(); // Refresh the list
+          }}
           onClose={() => setShowAddForm(false)}
         />
       )}
+
+      {/* Edit Customer Modal */}
+      {showEditForm && selectedCustomer && (
+        <EditCustomerForm
+          customer={selectedCustomer}
+          onSuccess={() => {
+            setShowEditForm(false);
+            setCurrentPage(1); // Reset to first page
+            fetchCustomers(); // Refresh the list
+          }}
+          onClose={() => setShowEditForm(false)}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        customerName={selectedCustomer ? `${selectedCustomer.first_name} ${selectedCustomer.last_name}` : ''}
+        isLoading={isDeleting}
+        onConfirm={handleDeleteCustomer}
+        onCancel={() => setShowDeleteModal(false)}
+      />
     </div>
   );
 } 

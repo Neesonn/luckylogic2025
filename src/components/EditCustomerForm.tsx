@@ -1,34 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { FaTimes, FaSpinner } from 'react-icons/fa';
-import { faker } from '@faker-js/faker/locale/en_AU';
 import toast from 'react-hot-toast';
-import { useRouter } from 'next/navigation';
 import { AUSTRALIAN_STATES } from '@/lib/constants';
 
-interface AddCustomerFormProps {
+interface Customer {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone_number?: string;
+  email_address: string;
+  address_line_1: string;
+  address_line_2?: string;
+  suburb: string;
+  postcode: string;
+  state: string;
+  country: string;
+  active_status: boolean;
+}
+
+interface EditCustomerFormProps {
+  customer: Customer;
   onSuccess: () => void;
   onClose: () => void;
 }
 
-export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
-  const router = useRouter();
-  const [formData, setFormData] = useState({
-    first_name: '',
-    last_name: '',
-    phone_number: '',
-    email_address: '',
-    address_line_1: '',
-    address_line_2: '',
-    suburb: '',
-    postcode: '',
-    state: '',
-    country: 'Australia', // Default to Australia
-    active_status: true,
+export function EditCustomerForm({ customer, onSuccess, onClose }: EditCustomerFormProps) {
+  const [formData, setFormData] = useState<Customer>({
+    ...customer,
+    country: 'Australia' // Ensure country is always Australia
   });
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,26 +43,6 @@ export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
     }));
   };
 
-  const generateDummyData = () => {
-    // Add a small delay to prevent rate limiting
-    setTimeout(() => {
-      const randomState = AUSTRALIAN_STATES[Math.floor(Math.random() * AUSTRALIAN_STATES.length)];
-      setFormData({
-        first_name: faker.person.firstName(),
-        last_name: faker.person.lastName(),
-        phone_number: `04${faker.string.numeric(8)}`.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3'),
-        email_address: faker.internet.email().toLowerCase(),
-        address_line_1: faker.location.streetAddress(),
-        address_line_2: Math.random() > 0.5 ? `Unit ${faker.number.int({ min: 1, max: 999 })}` : '',
-        suburb: faker.location.city(),
-        postcode: faker.location.zipCode('####'), // Australian format
-        state: randomState.code,
-        country: 'Australia',
-        active_status: Math.random() > 0.2, // 80% chance of being active
-      });
-    }, 500); // Add a 500ms delay
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
@@ -67,114 +50,50 @@ export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
     setLoading(true);
     setError(null);
 
-    const submitWithRetry = async (retryCount = 0): Promise<void> => {
-      try {
-        const { data, error } = await supabase
-          .from('customers')
-          .insert([formData])
-          .select()
-          .single();
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .update({
+          first_name: formData.first_name,
+          last_name: formData.last_name,
+          phone_number: formData.phone_number,
+          email_address: formData.email_address,
+          address_line_1: formData.address_line_1,
+          address_line_2: formData.address_line_2,
+          suburb: formData.suburb,
+          postcode: formData.postcode,
+          state: formData.state,
+          country: formData.country,
+          active_status: formData.active_status,
+        })
+        .eq('id', customer.id)
+        .select()
+        .single();
 
-        if (error) {
-          console.error('Supabase error details:', {
-            message: error.message,
-            code: error.code,
-            details: error.details,
-            hint: error.hint
-          });
-          
-          if (error.code === '429' && retryCount < 3) {
-            const delay = 2000 * (retryCount + 1);
-            console.log(`Rate limited. Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return submitWithRetry(retryCount + 1);
-          }
-          
-          let errorMessage = '';
-          if (error.code === '23505') {
-            errorMessage = 'A customer with this email already exists.';
-          } else if (error.code === '23503') {
-            errorMessage = 'Invalid reference in the data.';
-          } else if (error.code === 'PGRST116') {
-            errorMessage = 'You do not have permission to add customers.';
-          } else if (error.code === '429') {
-            errorMessage = 'Too many requests. Please wait a moment and try again.';
-          } else {
-            errorMessage = `Error: ${error.message}${error.hint ? ` (Hint: ${error.hint})` : ''}`;
-          }
-          
-          setError(errorMessage);
-          toast.error(`❌ ${errorMessage}`);
-          return;
+      if (error) {
+        console.error('Supabase error:', error);
+        let errorMessage = '';
+        if (error.code === '23505') {
+          errorMessage = 'A customer with this email already exists.';
+        } else if (error.code === '23503') {
+          errorMessage = 'Invalid reference in the data.';
+        } else if (error.code === 'PGRST116') {
+          errorMessage = 'You do not have permission to update customers.';
+        } else {
+          errorMessage = `Error: ${error.message}`;
         }
-
-        console.log('Customer added successfully:', data);
-        toast.success('✨ Customer added successfully!');
-        onSuccess();
-        
-        // Close the modal and redirect after a short delay
-        setTimeout(() => {
-          onClose();
-          router.push('/customers');
-          router.refresh();
-        }, 1000);
-      } catch (err) {
-        console.error('Network or unexpected error:', err);
-        const errorMessage = 'Connection failed. Please check your internet connection and try again.';
         setError(errorMessage);
         toast.error(`❌ ${errorMessage}`);
-      }
-    };
-
-    try {
-      await submitWithRetry();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const generateBulkDummyCustomers = async () => {
-    setLoading(true);
-    try {
-      const dummyCustomers = Array.from({ length: 5 }).map(() => ({
-        first_name: faker.person.firstName(),
-        last_name: faker.person.lastName(),
-        phone_number: `04${faker.string.numeric(8)}`.replace(/(\d{4})(\d{3})(\d{3})/, '$1 $2 $3'),
-        email_address: faker.internet.email().toLowerCase(),
-        address_line_1: faker.location.streetAddress(),
-        address_line_2: faker.location.secondaryAddress(),
-        suburb: faker.location.city(),
-        postcode: faker.location.zipCode('####'),
-        state: ['NSW', 'VIC', 'QLD', 'WA', 'SA', 'TAS', 'ACT', 'NT'][Math.floor(Math.random() * 8)],
-        country: 'Australia',
-        active_status: true,
-      }));
-
-      // Insert customers one by one with delay
-      for (const customer of dummyCustomers) {
-        const { error } = await supabase.from('customers').insert([customer]);
-        if (error) {
-          console.error('Error inserting customer:', error);
-          if (error.code === '429') {
-            // Wait for 2 seconds before trying the next one
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            // Retry this customer
-            const retryResult = await supabase.from('customers').insert([customer]);
-            if (retryResult.error) {
-              throw retryResult.error;
-            }
-          } else {
-            throw error;
-          }
-        }
-        // Add delay between successful inserts
-        await new Promise(resolve => setTimeout(resolve, 300));
+        return;
       }
 
-      onSuccess(); // This will refresh the customer list
+      toast.success('✨ Customer updated successfully!');
+      onSuccess();
     } catch (err) {
-      console.error('Error generating dummy customers:', err);
-      setError('Failed to generate dummy customers');
+      console.error('Network or unexpected error:', err);
+      const errorMessage = 'Connection failed. Please check your internet connection and try again.';
+      setError(errorMessage);
+      toast.error(`❌ ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -185,7 +104,7 @@ export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
       <div className="bg-[#1A1D24] rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-white">Add New Customer</h2>
+            <h2 className="text-2xl font-bold text-white">Edit Customer</h2>
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-white transition-colors"
@@ -334,32 +253,22 @@ export function AddCustomerForm({ onSuccess, onClose }: AddCustomerFormProps) {
               </div>
             </div>
 
-            <div className="mt-6 flex items-center justify-between">
-              <div className="flex gap-4">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {loading && <FaSpinner className="animate-spin" size={16} />}
-                  {loading ? 'Adding...' : 'Add Customer'}
-                </button>
-                <button
-                  type="button"
-                  onClick={generateDummyData}
-                  disabled={loading}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Generate Data
-                </button>
-              </div>
+            <div className="mt-6 flex items-center justify-end gap-4">
               <button
                 type="button"
-                onClick={generateBulkDummyCustomers}
+                onClick={onClose}
                 disabled={loading}
-                className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-white/5 text-white rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
               >
-                Add 5 Random Customers
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {loading && <FaSpinner className="animate-spin" size={16} />}
+                {loading ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
 
