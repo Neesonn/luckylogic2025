@@ -168,8 +168,10 @@ export default function CustomersPage() {
                   ) : (
                     customers.map((customer) => (
                       <tr key={customer.id} className="hover:bg-white/5">
-                        <td className="py-4 px-4">{customer.id}</td>
-                        <td className="py-4 px-4">{customer.first_name}</td>
+                        <td className="py-4 px-4 font-mono text-sm text-gray-300">
+                          #{customer.id.slice(0, 6).toUpperCase()}
+                        </td>
+                        <td className="py-4 px-4 text-white">{customer.first_name}</td>
                         <td className="py-4 px-4">{customer.last_name}</td>
                         <td className="py-4 px-4">{customer.phone_number || 'N/A'}</td>
                         <td className="py-4 px-4">{customer.email_address}</td>
